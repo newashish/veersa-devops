@@ -1,5 +1,5 @@
 
-name: Build Docker Image
+name: Build and Push Docker Image to ACR
 
 on:
   push:
@@ -7,16 +7,46 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
+    name: Build and Push Image
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Build Docker Image
         run: docker build -t welcome-backend:latest .
 
       - name: Tag Docker Image for ACR
-        run: docker tag welcome-backend:latest chatbotveersa-afageydwc9a7bqbe.azurecr.io/welcome-backend:latest
+        run: |
+          docker tag welcome-backend:latest \
+            chatbotveersa-afageydwc9a7bqbe.azurecr.io/welcome-backend:latest
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Login to Azure Container Registry
+        run: az acr login --name chatbotveersa
+
+      - name: Push Image to ACR
+        run: |
+          docker push \
+            chatbotveersa-afageydwc9a7bqbe.azurecr.io/welcome-backend:latest
+
+      - name: Verify Image in ACR
+        run: |
+          az acr repository show-tags \
+            --name chatbotveersa \
+            --repository welcome-backend \
+            --output table
+
+      - name: Azure Logout
+        if: always()
+        run: az logout || true

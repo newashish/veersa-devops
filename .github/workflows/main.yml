@@ -55,22 +55,6 @@ jobs:
       - name: Install Container Apps CLI extension
         run: az extension add --name containerapp --upgrade --only-show-errors
 
-      - name: Configure ACR Pull with Service Principal
-        env:
-          AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
-        run: |
-          SP_CLIENT_ID=$(echo "$AZURE_CREDENTIALS" | jq -r '.clientId')
-          SP_CLIENT_SECRET=$(echo "$AZURE_CREDENTIALS" | jq -r '.clientSecret')
-          echo "::add-mask::$SP_CLIENT_SECRET"
-
-          az containerapp registry set \
-            --name ${{ env.CONTAINER_APP }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --server ${{ env.REGISTRY }} \
-            --username "$SP_CLIENT_ID" \
-            --password "$SP_CLIENT_SECRET" \
-            --only-show-errors
-
       - name: Deploy New Revision to Container App
         run: |
           az containerapp update \

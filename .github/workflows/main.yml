@@ -52,8 +52,8 @@ jobs:
       - name: Set Azure Subscription
         run: az account set --subscription ${{ env.SUBSCRIPTION_ID }}
 
-      - name: Install Container Apps CLI extension
-        run: az extension add --name containerapp --upgrade --only-show-errors
+     # - name: Install Container Apps CLI extension
+     #   run: az extension add --name containerapp --upgrade --only-show-errors
 
       - name: Deploy New Revision to Container App
         run: |

@@ -1,5 +1,5 @@
 
-name: Build and Push Chatbot to Azure ACR
+name: Build Docker Image
 
 on:
   push:
@@ -7,57 +7,16 @@ on:
       - main
   workflow_dispatch:
 
-permissions:
-  contents: read
-
-env:
-  ACR_NAME: chatbotveersa
-  IMAGE_NAME: chatbotveersa
-
 jobs:
-  build-and-push:
-    name: Build and Push Docker Image
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout source code
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Build Docker Image
+        run: docker build -t welcome-backend:latest backend
 
-      - name: Verify ACR
-        run: |
-          az acr show \
-            --name "$ACR_NAME" \
-            --resource-group rg-poc-demo \
-            --query loginServer \
-            --output tsv
-
-      - name: Login to Azure Container Registry
-        run: az acr login --name "$ACR_NAME"
-
-      - name: Build Docker image
-        run: |
-          docker build \
-            -t "${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest" \
-            -t "${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}" \
-            .
-
-      - name: Push Docker image
-        run: |
-          docker push "${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest"
-          docker push "${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}"
-
-      - name: Show pushed images
-        run: |
-          az acr repository show-tags \
-            --name "$ACR_NAME" \
-            --repository "$IMAGE_NAME" \
-            --output table
-
-      - name: Azure Logout
-        if: always()
-        run: az logout
+      - name: Tag Docker Image for ACR
+        run: docker tag welcome-backend:latest chatbotveersa-afageydwc9a7bqbe.azurecr.io/welcome-backend:latest

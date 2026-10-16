@@ -1,5 +1,5 @@
 
-name: Build and Push Image
+name: Build and Push Docker Image to ACR
 
 on:
   push:
@@ -22,7 +22,7 @@ jobs:
       - name: Build Docker Image
         run: docker build -t welcome-backend:latest .
 
-      - name: Tag Docker Image for ACR
+      - name: Tag Docker Image
         run: |
           docker tag welcome-backend:latest \
             chatbotveersa-afageydwc9a7bqbe.azurecr.io/welcome-backend:latest
@@ -32,7 +32,20 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Login to Azure Container Registry
+      - name: Set Azure Subscription
+        run: |
+          az account set \
+            --subscription b8b711d8-ae79-422d-8b49-936f9422333a
+
+      - name: Verify ACR
+        run: |
+          az acr show \
+            --name chatbotveersa \
+            --resource-group rg-poc-demo \
+            --query loginServer \
+            --output tsv
+
+      - name: Login to ACR
         run: az acr login --name chatbotveersa
 
       - name: Push Image to ACR
@@ -40,10 +53,11 @@ jobs:
           docker push \
             chatbotveersa-afageydwc9a7bqbe.azurecr.io/welcome-backend:latest
 
-      - name: Verify Image in ACR
+      - name: Verify Pushed Image
         run: |
           az acr repository show-tags \
             --name chatbotveersa \
+            --resource-group rg-poc-demo \
             --repository welcome-backend \
             --output table
 

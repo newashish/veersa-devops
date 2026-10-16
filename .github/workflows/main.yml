@@ -1,4 +1,4 @@
-name: Build and Push Docker Image to ACR
+name: Build, Push to ACR and Deploy to Container App
 
 on:
   push:
@@ -12,10 +12,13 @@ permissions:
 env:
   REGISTRY: chatbotveersa-afageydwc9a7bqbe.azurecr.io
   IMAGE_NAME: welcome-backend
+  RESOURCE_GROUP: rg-poc-demo
+  CONTAINER_APP: backend
+  SUBSCRIPTION_ID: b8b711d8-ae79-422d-8b49-936f9422333a
 
 jobs:
-  build:
-    name: Build and Push Image
+  build-and-deploy:
+    name: Build, Push and Deploy
     runs-on: ubuntu-latest
 
     steps:
@@ -30,7 +33,60 @@ jobs:
           password: ${{ fromJSON(secrets.AZURE_CREDENTIALS).acrPassword }}
 
       - name: Build Docker Image
-        run: docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest .
+        run: |
+          docker build \
+            -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
+            .
 
       - name: Push Image to ACR
-        run: docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+        run: |
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Azure Login (Service Principal)
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set Azure Subscription
+        run: az account set --subscription ${{ env.SUBSCRIPTION_ID }}
+
+      - name: Install Container Apps CLI extension
+        run: az extension add --name containerapp --upgrade --only-show-errors
+
+      - name: Configure ACR Pull with Service Principal
+        env:
+          AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+        run: |
+          SP_CLIENT_ID=$(echo "$AZURE_CREDENTIALS" | jq -r '.clientId')
+          SP_CLIENT_SECRET=$(echo "$AZURE_CREDENTIALS" | jq -r '.clientSecret')
+          echo "::add-mask::$SP_CLIENT_SECRET"
+
+          az containerapp registry set \
+            --name ${{ env.CONTAINER_APP }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --server ${{ env.REGISTRY }} \
+            --username "$SP_CLIENT_ID" \
+            --password "$SP_CLIENT_SECRET" \
+            --only-show-errors
+
+      - name: Deploy New Revision to Container App
+        run: |
+          az containerapp update \
+            --name ${{ env.CONTAINER_APP }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            --revision-suffix gh-${{ github.run_number }}-${{ github.run_attempt }}
+
+      - name: Show Active Revisions
+        run: |
+          az containerapp revision list \
+            --name ${{ env.CONTAINER_APP }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --query "[?properties.active].{Revision:name, Image:properties.template.containers[0].image, Traffic:properties.trafficWeight, Created:properties.createdTime}" \
+            --output table
+
+      - name: Azure Logout
+        if: always()
+        run: az logout || true
